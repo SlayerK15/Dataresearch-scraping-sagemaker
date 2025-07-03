@@ -135,16 +135,3 @@ For questions, raise a GitHub issue or email the maintainer.
 
 ---
 
-Let me know if you want:
-
-* **User stories**
-* **Detailed API specs**
-* **Sample MongoDB schemas**
-* **Component stubs/scaffolds**
-* Or a project board template!
-
----
-
-**Ready to use:**
-Copy this as your new README.md and update as the project progresses.
-
