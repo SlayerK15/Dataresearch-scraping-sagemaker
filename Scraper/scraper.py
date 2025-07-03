@@ -1,13 +1,18 @@
-import requests
-from requests.adapters import HTTPAdapter, Retry
-from bs4 import BeautifulSoup
-import time
+import asyncio
 import random
-from pymongo import MongoClient
 import os
-from dotenv import load_dotenv
-import logger
+import subprocess
+import uuid
 from urllib.parse import urljoin
+from typing import List
+
+import aiohttp
+from aiohttp import ClientSession, ClientTimeout
+from bs4 import BeautifulSoup
+from pymongo import MongoClient
+from dotenv import load_dotenv
+
+import logger
 
 load_dotenv()
 
@@ -17,26 +22,36 @@ client = MongoClient(os.getenv("MONGO_URI"))
 db = client.scraper_db
 collection = db.raw_html
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-}
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    "Mozilla/5.0 (X11; Linux x86_64)"
+]
 
-def get_soup(url):
+def load_proxies():
+    path = os.path.join(os.path.dirname(__file__), "proxies.txt")
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        return [p.strip() for p in f if p.strip()]
+
+PROXIES = load_proxies()
+
+timeout = ClientTimeout(total=60)
+
+async def fetch(session: ClientSession, url: str, proxy: str | None = None) -> BeautifulSoup:
     scraperapi_url = f"http://api.scraperapi.com/?api_key={SCRAPER_API_KEY}&url={url}"
-
-    session = requests.Session()
-    retries = Retry(total=3, backoff_factor=5, status_forcelist=[429, 500, 502, 503, 504])
-    session.mount("http://", HTTPAdapter(max_retries=retries))
-
+    headers = {"User-Agent": random.choice(USER_AGENTS)}
     try:
-        response = session.get(scraperapi_url, headers=headers, timeout=60)
-        response.raise_for_status()
-        return BeautifulSoup(response.text, "html.parser")
-    except requests.RequestException as e:
-        logger.logging.error(f"ScraperAPI Request failed after retries: {e}")
-        raise e
+        async with session.get(scraperapi_url, headers=headers, proxy=proxy) as resp:
+            resp.raise_for_status()
+            text = await resp.text()
+            return BeautifulSoup(text, "html.parser")
+    except Exception as e:
+        logger.logging.error(f"Request failed: {e}")
+        raise
 
-def get_total_pages(soup):
+def get_total_pages(soup: BeautifulSoup) -> int:
     try:
         pagination = soup.select('span.s-pagination-item')
         if pagination:
@@ -57,34 +72,82 @@ def extract_product_urls(soup):
             urls.append(full_url)
     return urls
 
-def scrape_product(url):
-    soup = get_soup(url)
+def get_product_count(soup: BeautifulSoup) -> int:
+    """Return the number of product links found on the page."""
+    return len(soup.select("a.a-link-normal.s-no-outline"))
+
+async def scrape_product(session: ClientSession, url: str, proxy: str | None = None):
+    soup = await fetch(session, url, proxy)
     collection.insert_one({
         "url": url,
         "html": str(soup),
-        "timestamp": time.time()
+        "timestamp": asyncio.get_event_loop().time()
     })
     logger.logging.info(f"Scraped and saved: {url}")
 
-def scrape_category(url):
-    first_page_soup = get_soup(url)
-    total_pages = get_total_pages(first_page_soup)
-    logger.logging.info(f"Total pages found: {total_pages}")
+async def scrape_page(session: ClientSession, page_url: str, proxy: str | None = None):
+    soup = await fetch(session, page_url, proxy)
+    product_urls = extract_product_urls(soup)
+    tasks = [scrape_product(session, purl, proxy) for purl in product_urls]
+    await asyncio.gather(*tasks)
+    await asyncio.sleep(random.uniform(1, 2))
 
-    base_url = url + "&page={}"
+SCRAPER_IMAGE = os.getenv("SCRAPER_WORKER_IMAGE", "scraper")
 
-    for page in range(1, total_pages + 1):
-        logger.logging.info(f"Scraping page: {page}")
-        try:
-            soup = get_soup(base_url.format(page))
-            product_urls = extract_product_urls(soup)
+def launch_scraper_container(page_urls: List[str]):
+    mongo_uri = os.getenv("MONGO_URI")
+    name = f"scraper-{uuid.uuid4().hex[:6]}"
+    urls_env = ",".join(page_urls)
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--rm",
+        "--name",
+        name,
+        "-e",
+        f"MONGO_URI={mongo_uri}",
+        "-e",
+        f"PAGE_URLS={urls_env}",
+        SCRAPER_IMAGE,
+        "python",
+        "page_worker.py",
+    ]
+    try:
+        subprocess.run(cmd, check=True)
+        logger.logging.info(f"Launched container {name} for {page_urls}")
+    except Exception as e:
+        logger.logging.error(f"Container launch failed for {page_urls}: {e}")
 
-            for product_url in product_urls:
-                try:
-                    scrape_product(product_url)
-                except Exception as e:
-                    logger.logging.error(f"Failed scraping product {product_url}: {e}")
-                time.sleep(random.uniform(1, 3))  # Rate limiting
+async def scrape_category(url: str):
+    async with ClientSession(timeout=timeout) as session:
+        proxy = random.choice(PROXIES) if PROXIES else None
+        first_page_soup = await fetch(session, url, proxy)
+        total_pages = get_total_pages(first_page_soup)
+        logger.logging.info(f"Total pages found: {total_pages}")
 
-        except Exception as e:
-            logger.logging.error(f"Failed scraping page {page}: {e}")
+    base_url = url + "&page={}"  # Format string for page URLs
+
+    product_count = get_product_count(first_page_soup)
+    if product_count > 10:
+        pages_per_container = 1
+    elif product_count < 5:
+        pages_per_container = 3 if product_count <= 2 else 2
+    else:
+        pages_per_container = 1
+
+    page = 1
+    while page <= total_pages:
+        batch_urls = [
+            base_url.format(p)
+            for p in range(page, min(page + pages_per_container, total_pages + 1))
+        ]
+        logger.logging.info(
+            f"Launching container for pages {batch_urls} (products per page: {product_count})"
+        )
+        launch_scraper_container(batch_urls)
+        page += pages_per_container
+
+async def scrape_multiple(urls: list[str]):
+    for url in urls:
+        await scrape_category(url)
