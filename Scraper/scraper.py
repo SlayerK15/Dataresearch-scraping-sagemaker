@@ -1,4 +1,5 @@
 import requests
+from requests.adapters import HTTPAdapter, Retry
 from bs4 import BeautifulSoup
 import time
 import random
@@ -6,44 +7,54 @@ from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
 import logger
+from urllib.parse import urljoin
 
 load_dotenv()
+
+SCRAPER_API_KEY = "c81e2f91594d517f7040e07f6f9f86bd"  # Replace with a valid key
 
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client.scraper_db
 collection = db.raw_html
-
-def get_proxies():
-    with open("proxies.txt", "r") as file:
-        proxies = file.read().splitlines()
-    return proxies
-
-def get_random_proxy():
-    proxies = get_proxies()
-    return {"http": random.choice(proxies), "https": random.choice(proxies)}
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 
 def get_soup(url):
-    proxy = get_random_proxy()
-    response = requests.get(url, headers=headers, proxies=proxy)
-    response.raise_for_status()
-    return BeautifulSoup(response.text, "html.parser")
+    scraperapi_url = f"http://api.scraperapi.com/?api_key={SCRAPER_API_KEY}&url={url}"
+
+    session = requests.Session()
+    retries = Retry(total=3, backoff_factor=5, status_forcelist=[429, 500, 502, 503, 504])
+    session.mount("http://", HTTPAdapter(max_retries=retries))
+
+    try:
+        response = session.get(scraperapi_url, headers=headers, timeout=60)
+        response.raise_for_status()
+        return BeautifulSoup(response.text, "html.parser")
+    except requests.RequestException as e:
+        logger.logging.error(f"ScraperAPI Request failed after retries: {e}")
+        raise e
 
 def get_total_pages(soup):
     try:
-        pagination = soup.select('span.s-pagination-item')  # Adjust based on website
+        pagination = soup.select('span.s-pagination-item')
         if pagination:
             return int(pagination[-1].text.strip())
-    except:
+    except Exception as e:
+        logger.logging.error(f"Pagination extraction error: {e}")
         return 1
     return 1
 
+# Corrected URL extraction
 def extract_product_urls(soup):
     links = soup.select("a.a-link-normal.s-no-outline")
-    urls = ["https://amazon.in" + link['href'] for link in links if link.get('href')]
+    urls = []
+    for link in links:
+        href = link.get('href')
+        if href:
+            full_url = urljoin("https://www.amazon.in", href)
+            urls.append(full_url)
     return urls
 
 def scrape_product(url):
@@ -64,9 +75,16 @@ def scrape_category(url):
 
     for page in range(1, total_pages + 1):
         logger.logging.info(f"Scraping page: {page}")
-        soup = get_soup(base_url.format(page))
-        product_urls = extract_product_urls(soup)
-        
-        for product_url in product_urls:
-            scrape_product(product_url)
-            time.sleep(random.uniform(1, 4))  # Rate limiting
+        try:
+            soup = get_soup(base_url.format(page))
+            product_urls = extract_product_urls(soup)
+
+            for product_url in product_urls:
+                try:
+                    scrape_product(product_url)
+                except Exception as e:
+                    logger.logging.error(f"Failed scraping product {product_url}: {e}")
+                time.sleep(random.uniform(1, 3))  # Rate limiting
+
+        except Exception as e:
+            logger.logging.error(f"Failed scraping page {page}: {e}")
