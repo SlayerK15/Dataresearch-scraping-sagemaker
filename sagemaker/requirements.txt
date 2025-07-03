@@ -1,7 +1,5 @@
 fastapi
 uvicorn[standard]
-requests
-beautifulsoup4
 pymongo
+beautifulsoup4
 python-dotenv
-aiohttp
