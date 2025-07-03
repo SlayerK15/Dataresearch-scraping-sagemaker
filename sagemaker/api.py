@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from analyze_data import analyze
+from analyze_data import analyze, aggregate_average_price
 
 app = FastAPI()
 
@@ -9,5 +9,6 @@ def analyze_endpoint(min_price: float | None = None, max_price: float | None = N
     # Convert Mongo documents to serializable dicts
     for item in data:
         item['_id'] = str(item['_id'])
-    return {"results": data}
+    avg_price = aggregate_average_price()
+    return {"results": data, "average_price": avg_price}
 

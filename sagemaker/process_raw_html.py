@@ -19,9 +19,13 @@ def extract_data(html):
     soup = BeautifulSoup(html, "html.parser")
     title = soup.find("span", id="productTitle")
     price = soup.find("span", class_="a-price")
+    image = soup.find("img", id="landingImage")
+    rating = soup.find("span", class_="a-icon-alt")
     return {
         "title": title.get_text(strip=True) if title else None,
         "price": price.get_text(strip=True) if price else None,
+        "image_url": image["src"] if image and image.has_attr("src") else None,
+        "rating": rating.get_text(strip=True) if rating else None,
     }
 
 
