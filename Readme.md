@@ -8,7 +8,7 @@ This project is designed to build an end-to-end pipeline for extracting raw HTML
 
 ## 📊 Architecture
 
-![System Architecture](architecture.png)
+![System Architecture](docs/architecture.png)
 
 *Image: High-level architecture showing the flow from Scraper Instance to Dashboard via MongoDB and SageMaker.*
 
@@ -81,7 +81,6 @@ project/
 ├── dashboard/             # Visualization/dashboard code
 ├── mongodb/               # Setup scripts for MongoDB
 ├── docs/                  # Documentation and diagrams
-│   └── architecture.png   # <-- Put your architecture diagram here
 ├── requirements.txt
 ├── README.md
 └── ...
@@ -93,14 +92,4 @@ project/
 **Contact:**  
 For queries or collaboration, feel free to open an issue or contact the maintainer.
 
-```
 
----
-
-**How to use this:**
-
-* Place your architecture diagram in your repo, ideally in a `/docs` folder, and update the image path in the markdown if needed.
-* Update the **Tasks To Be Completed** section as you finish each part of the project.
-* Feel free to tweak wording and details to better fit your workflow.
-
-Let me know if you want a more detailed breakdown or a specific section!
