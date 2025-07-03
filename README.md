@@ -21,6 +21,7 @@ Dashboard/API → Scraper (autoscaling containers on EC2/Kubernetes) → MongoDB
 
 * **Receives list of URLs** (API, JSON, CSV)
 * **Spawns new container per page/URL** (autoscaling: Kubernetes/ECS/EC2 ASG)
+* **Master container automatically launches worker containers** for each page using Docker or Kubernetes
 * **Scrapes raw HTML** for each target URL
 * **Runs on AWS EC2 Free Tier** (lightweight)
 * **Saves raw HTML to MongoDB Instance 1**

@@ -1,6 +1,8 @@
 import asyncio
 import random
 import os
+import subprocess
+import uuid
 from urllib.parse import urljoin
 
 import aiohttp
@@ -78,6 +80,39 @@ async def scrape_product(session: ClientSession, url: str, proxy: str | None = N
     })
     logger.logging.info(f"Scraped and saved: {url}")
 
+async def scrape_page(session: ClientSession, page_url: str, proxy: str | None = None):
+    soup = await fetch(session, page_url, proxy)
+    product_urls = extract_product_urls(soup)
+    tasks = [scrape_product(session, purl, proxy) for purl in product_urls]
+    await asyncio.gather(*tasks)
+    await asyncio.sleep(random.uniform(1, 2))
+
+SCRAPER_IMAGE = os.getenv("SCRAPER_WORKER_IMAGE", "scraper")
+
+def launch_scraper_container(page_url: str):
+    mongo_uri = os.getenv("MONGO_URI")
+    name = f"scraper-{uuid.uuid4().hex[:6]}"
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--rm",
+        "--name",
+        name,
+        "-e",
+        f"MONGO_URI={mongo_uri}",
+        "-e",
+        f"PAGE_URL={page_url}",
+        SCRAPER_IMAGE,
+        "python",
+        "page_worker.py",
+    ]
+    try:
+        subprocess.run(cmd, check=True)
+        logger.logging.info(f"Launched container {name} for {page_url}")
+    except Exception as e:
+        logger.logging.error(f"Container launch failed for {page_url}: {e}")
+
 async def scrape_category(url: str):
     async with ClientSession(timeout=timeout) as session:
         proxy = random.choice(PROXIES) if PROXIES else None
@@ -85,20 +120,11 @@ async def scrape_category(url: str):
         total_pages = get_total_pages(first_page_soup)
         logger.logging.info(f"Total pages found: {total_pages}")
 
-        base_url = url + "&page={}"
-
-        for page in range(1, total_pages + 1):
-            logger.logging.info(f"Scraping page: {page}")
-            try:
-                soup = await fetch(session, base_url.format(page), proxy)
-                product_urls = extract_product_urls(soup)
-
-                tasks = [scrape_product(session, purl, proxy) for purl in product_urls]
-                await asyncio.gather(*tasks)
-                await asyncio.sleep(random.uniform(1, 2))
-
-            except Exception as e:
-                logger.logging.error(f"Failed scraping page {page}: {e}")
+    base_url = url + "&page={}"
+    for page in range(1, total_pages + 1):
+        page_url = base_url.format(page)
+        logger.logging.info(f"Launching container for page {page}")
+        launch_scraper_container(page_url)
 
 async def scrape_multiple(urls: list[str]):
     for url in urls:
