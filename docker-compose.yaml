@@ -1,0 +1,54 @@
+version: '3'
+services:
+  scraper:
+    build: ./Scraper
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URI=mongodb://mongo-raw:27017
+    depends_on:
+      - mongo-raw
+
+  mongo-raw:
+    image: mongo:latest
+    volumes:
+      - mongo-raw-data:/data/db
+    ports:
+      - "27017:27017"
+
+  sagemaker1:
+    build: ./sagemaker
+    command: ["python", "process_raw_html.py"]
+    environment:
+      - MONGO_RAW_URI=mongodb://mongo-raw:27017
+      - MONGO_PROCESSED_URI=mongodb://mongo-processed:27017
+    depends_on:
+      - mongo-raw
+      - mongo-processed
+
+  mongo-processed:
+    image: mongo:latest
+    volumes:
+      - mongo-processed-data:/data/db
+    ports:
+      - "27018:27017"
+
+  sagemaker2:
+    build: ./sagemaker
+    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8500"]
+    environment:
+      - MONGO_PROCESSED_URI=mongodb://mongo-processed:27017
+    depends_on:
+      - mongo-processed
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "8600:8000"
+    depends_on:
+      - scraper
+      - sagemaker2
+
+volumes:
+  mongo-raw-data:
+  mongo-processed-data:

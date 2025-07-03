@@ -29,38 +29,35 @@ This project is designed to build an end-to-end pipeline for extracting raw HTML
 
 ---
 
-## 🔜 Tasks To Be Completed
+## 🚀 Implemented Features
 
-1. **SageMaker Data Processing:**
-   - Build the SageMaker pipeline to:
-     - Pull raw HTML data from MongoDB.
-     - Clean, parse, and format the data as required for downstream use.
-     - Send cleaned/formatted data back to MongoDB for storage.
+This repository now contains working examples for each component in the architecture.
 
-2. **User Preference Handling:**
-   - Implement a module to allow user queries/preferences.
-   - Format and filter the cleaned data based on user input before visualization.
+1. **SageMaker Data Processing (Instance 1)**
+   - `sagemaker/process_raw_html.py` pulls raw HTML from MongoDB and extracts basic fields such as product title and price.
+   - Cleaned documents are written to a second MongoDB instance.
 
-3. **Data Visualization (Dashboard):**
-   - Develop a dashboard (web app or visualization tool) to display processed data.
-   - Integrate SageMaker’s output and visualize key metrics and trends.
+2. **User Preference Handling & Analysis (Instance 2)**
+   - `sagemaker/analyze_data.py` exposes a simple function for querying the processed data with optional price filters.
+   - `sagemaker/api.py` provides a FastAPI endpoint so the dashboard can request analyses.
 
-4. **Automation and Scaling:**
-   - Automate the end-to-end flow (triggering scraper, SageMaker processing, and dashboard refresh).
-   - Implement scaling strategies (e.g., 1 page = 1 scraper container; consider container orchestration for high-volume scraping).
+3. **Dashboard**
+   - `dashboard/main.py` lets users submit URLs for scraping and request aggregated results from SageMaker.
 
-5. **Logging & Monitoring:**
-   - Add detailed logging in all components (Scraper, SageMaker, Dashboard).
-   - Implement error handling, rate limiting, and monitoring to avoid bans and ensure reliability.
+4. **Automation and Scaling**
+   - A root `docker-compose.yaml` spins up the scraper, two MongoDB instances, both SageMaker services and the dashboard for local testing.
+
+5. **Logging & Monitoring**
+   - Each component prints progress to the console and can easily be extended with more robust logging.
 
 ---
 
 ## 🏗️ Next Steps
 
-- Finalize and test the SageMaker cleaning/formatting pipeline.
-- Build the dashboard UI and integrate with SageMaker.
-- Optimize pipeline for scalability and robustness.
-- Enhance documentation and provide deployment scripts.
+- Expand the HTML parser to extract additional fields and handle more websites.
+- Add authentication and better error handling across services.
+- Explore autoscaling strategies for production workloads.
+- Improve documentation and provide deployment scripts for cloud environments.
 
 ---
 
@@ -70,20 +67,19 @@ If you’d like to help or have ideas, please open an issue or pull request!
 
 ---
 
-## 📁 Project Structure (Planned)
+## 📁 Project Structure
 
 ```
 
 project/
 │
-├── scraper/               # Scraper app code
-├── sagemaker/             # Data cleaning & formatting code
-├── dashboard/             # Visualization/dashboard code
-├── mongodb/               # Setup scripts for MongoDB
+├── Scraper/               # Scraper service
+├── sagemaker/             # Data processing & analysis services
+├── dashboard/             # Simple frontend API
+├── mongodb/               # (placeholder for DB configs)
 ├── docs/                  # Documentation and diagrams
-├── requirements.txt
-├── README.md
-└── ...
+├── docker-compose.yaml    # Local orchestration
+└── README.md
 
 ```
 
