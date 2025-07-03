@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 
 load_dotenv()
 
-SCRAPER_API_KEY = "c81e2f91594d517f7040e07f6f9f86bd"  # Replace with a valid key
+SCRAPER_API_KEY = "APIKEY"  # Replace with a valid key
 
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client.scraper_db
