@@ -66,12 +66,12 @@ Dashboard/API → Scraper (autoscaling containers on EC2/Kubernetes) → MongoDB
 
 | Component       | Features Needed                                                  | Status |
 | --------------- | ---------------------------------------------------------------- | ------ |
-| **Scraper**     | Autoscale, API, scrape any URL, send raw HTML to MongoDB 1       | ✅ Basic |
+| **Scraper**     | Autoscale, API, scrape any URL, send raw HTML to MongoDB 1       | ✅ Advanced |
 | **MongoDB 1**   | Store raw HTML, >30GB, expose data to SageMaker 1                | ✅       |
 | **SageMaker 1** | Extract structured data, send to MongoDB 2                       | ✅       |
 | **MongoDB 2**   | Store processed data, buffer only, expose to SageMaker 2         | ✅       |
-| **SageMaker 2** | Data analysis, user preference, visualization, API for dashboard | ✅ Basic |
-| **Dashboard**   | Input URLs, trigger scrape, visualize results, request analysis  | ✅ Basic |
+| **SageMaker 2** | Data analysis, user preference, visualization, API for dashboard | ✅ Advanced |
+| **Dashboard**   | Input URLs, trigger scrape, visualize results, request analysis  | ✅ Advanced |
 
 > **Note:** Update the table as you implement each part!
 
